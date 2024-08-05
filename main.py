@@ -1,7 +1,4 @@
 import asyncio
-# import logging
-# import time
-
 import aiohttp
 from bs4 import BeautifulSoup
 from fake_useragent import UserAgent
@@ -11,61 +8,27 @@ URL = {
 }
 
 headers = {'User-Agent': UserAgent().chrome}
+params = {}
 
 
-async def fetch(session: aiohttp.ClientSession, url: str) -> str:
-    async with session.get(url, headers=headers) as response:
+# УКАЗАТЬ ЧТО ПАРАМС ЯВЯЛЕТСЯ НЕОБЯЗАТЕЛЬНЫМ АРГУМЕНТОМ!!!
+async def fetch(session: aiohttp.ClientSession, url: str, params: dict) -> str:
+    with session.get(url, headers=headers, params=params) as response:  # нужен ли асинк перед виз
         response = await response.text()
         return response
 
 
 async def parse_otodom() -> tuple:
-    # try:
     async with aiohttp.ClientSession() as session:
-        html = await fetch(session, URL.get('otodom'))
+        html = await fetch(session, URL.get('otodom'), params={})
         soup = BeautifulSoup(html, 'lxml')
 
-        ul = soup.find('ul', class_='css-rqwdxd e127mklk0')
+        page_quantity = int(
+            soup.find('ul', class_='e1h66krm4 css-iiviho').find_all('li', class_='css-1lclt1h')[-1].text)
 
-        # links = tuple(elem.get('href') for elem in
-        #               soup.find('ol', class_='media-item-list media-item-list--timestamps').findAll('a',
-        #                                                                                             class_='js-tealium-tracking'))
-        # articles = tuple(elem.text for elem in
-        #                  soup.find('ol', class_='media-item-list media-item-list--timestamps').findAll('a',
-        #                                                                                                class_='js-tealium-tracking'))
-
-        photoes = tuple(div.find('img', class_='css-uwwqev ed99okv5') for div in
-                        ul.find_all('div', attrs={'class': 'css-17rb9mp', 'aria-selected': 'true'}))
-
-        # descriptions = tuple(elem.text for elem in
-        #                  soup.find('ol', class_='media-item-list media-item-list--timestamps').findAll('a',
-        #                                                                                                class_='js-tealium-tracking'))
-
-        print(photoes)
-
-    # except Exception as _ex:
-    #     logging.error(_ex)
-
-
-# config: Config
-async def start_parsing() -> None:
-    while True:
-        # start_time = time.monotonic()
-        tasks = [
-            asyncio.create_task(parse_otodom()),
-
-        ]
-
-        # connection = BotDB(config)
-        # await connection.create_pool()
-
-        # for result in await asyncio.gather(*tasks):
-        #     await connection.update_news(paper_name=result[0], news=result[1])
-
-        # connection.pool.close()
-        # logging.info(f'Process of collecting news took {round(time.monotonic() - start_time, 1)} seconds')
-
-        await asyncio.sleep(300)
+        tasks = []
+        for page_number in range(1, page_quantity + 1):
+            tasks.append(asyncio.create_task(fetch(session, URL.get('otodom'), {'page': page_number})))
 
 
 asyncio.run(parse_otodom())
