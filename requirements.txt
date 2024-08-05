@@ -7,6 +7,7 @@ bs4==0.0.2
 fake-useragent==1.5.1
 frozenlist==1.4.1
 idna==3.7
+lxml==5.2.2
 multidict==6.0.5
 soupsieve==2.5
 yarl==1.9.4
