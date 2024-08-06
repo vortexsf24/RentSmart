@@ -11,12 +11,17 @@ URL = {
 headers = {'User-Agent': UserAgent().random}
 params = {}
 
+tasks = []
+
 a = 0
 async def fetch(session: aiohttp.ClientSession, url: str, params: dict) -> str:
     async with session.get(url, headers={'User-Agent': UserAgent().random}, params=params) as response:
         global a
+        global tasks
         a += 1
         print(response.status, a)
+        if response.status == 429:
+            tasks.append(asyncio.create_task(fetch(session, url, params)))
         response = await response.text()
         return response
 
@@ -29,7 +34,7 @@ async def parse_otodom() -> tuple:
         page_quantity = int(
             soup.find('ul', class_='e1h66krm4 css-iiviho').find_all('li', class_='css-1lclt1h')[-1].text)
 
-        tasks = []
+        global tasks
         for page_number in range(1, page_quantity + 1):
             tasks.append(asyncio.create_task(fetch(session, URL.get('otodom'), {'page': page_number})))
 
