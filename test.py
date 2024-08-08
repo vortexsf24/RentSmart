@@ -1,10 +1,2 @@
-
-
-def asd():
-    a = 3
-    try :
-        print(a/0)
-    except Exception as ex:
-        print(ex, str(a))
-
-asd()
+a = {'test':123}
+print(a | {'asd': 1234123})
