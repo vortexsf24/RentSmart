@@ -19,7 +19,7 @@ results_number = 0
 a = 0
 
 
-async def timeout(attemp, session, params, page_number):
+async def timeout(attemp):
     await asyncio.sleep(1* 2**attemp + 0.1)
 
 
@@ -34,7 +34,7 @@ async def fetch(session: aiohttp.ClientSession, url: str, params: dict = params,
 
             html = await response.text()
             results_number += 1
-            # await asyncio.sleep(0.1)
+            # если сексесвелл то делит из списка
             return html
 
     except aiohttp.ClientResponseError as _failed_request:
@@ -43,10 +43,13 @@ async def fetch(session: aiohttp.ClientSession, url: str, params: dict = params,
 
             print(attemp)
             attemp+=1
-            tasks.append(asyncio.ensure_future(timeout(attemp, session, params, page_number)))
+            loop = asyncio.get_event_loop()
+            await loop.create_task(timeout(attemp))
+            # tasks.append(asyncio.ensure_future(timeout(attemp, session, params, page_number)))
             await asyncio.sleep(1 * 2 ** attemp)
-            tasks.append(asyncio.ensure_future(
-                fetch(session, URL.get('otodom'), {'page': page_number}, page_number=page_number, attemp=attemp)))
+            await loop.create_task(fetch(session, URL.get('otodom'), {'page': page_number}, page_number=page_number, attemp=attemp))
+            # tasks.append(asyncio.ensure_future(
+            #     fetch(session, URL.get('otodom'), {'page': page_number}, page_number=page_number, attemp=attemp)))
 
 
         elif _failed_request.status == 403:
@@ -76,6 +79,11 @@ async def parse_otodom() -> tuple:
 
         global results_number
         results = await asyncio.gather(*tasks)
+        # if failed_tasks:
+        #     results += await asyncio.gather(*failed_tasks)
+        #   [task for task, result in zip(tasks, results) if isinstance(result, Exception)]
+        # 1) возвращать исключение при 429, 2) сгенерировать список как сверху и если он не пустой то сделать для него газер 3) так повторять с увелеением задержки пока список будет не пустым
+        print(len(tasks))
 
 
 
