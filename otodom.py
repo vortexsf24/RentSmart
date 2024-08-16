@@ -25,7 +25,9 @@ MAX_REQUESTS_ATTEMPTS = 8
 async def fetch(session: aiohttp.ClientSession, params: dict = params, request_attempt: int = 1) -> str:
     try:
         async with session.get(URL, params=params, headers=headers) as response:
+            await asyncio.sleep(1)
             html = await response.text()
+            await asyncio.sleep(1)
             return html
 
     except aiohttp.ClientResponseError as _failed_request:
@@ -59,23 +61,31 @@ async def fetch(session: aiohttp.ClientSession, params: dict = params, request_a
 
 async def get_postings() -> tuple:
     async with aiohttp.ClientSession(
-            connector=aiohttp.TCPConnector(limit=20, ttl_dns_cache=518),
-            raise_for_status=True
+        connector=aiohttp.TCPConnector(limit=20, ttl_dns_cache=518),
+        raise_for_status=True
     ) as session:
         html = await fetch(session, params)
+        with open('html.html', 'w', encoding="utf-8") as file:
+            file.write(html)
         soup = BeautifulSoup(html, 'lxml')
 
         page_quantity = int(
-            soup.find('ul', attrs={'data-cy':'frontend.search.base-pagination.nexus-pagination'}).find_all('li')[-2].text
+            soup.find('ul', attrs={'data-cy': 'frontend.search.base-pagination.nexus-pagination'}).find_all('li')[-2].text
         )
 
         tasks = []
         for page_number in range(1, page_quantity + 1):
             tasks.append(asyncio.create_task(fetch(session, params | {'page': page_number})))
+        a = 0
+        for page in await asyncio.gather(*tasks):
+            soup = BeautifulSoup(page, 'lxml')
+            pictures_promoted = soup.find('ul', attrs={'class': 'css-rqwdxd e127mklk0'}).find_all('li')[0].find('img')
+            # pictures_first_group = soup.find('div', attrs={'data-cy': 'search.listing.organic'}).find_all('ul')
+            # location = soup.find_all('p', class_='css-42r2ms eejmx80')
+            a+=1
+            print(pictures_promoted, a)
 
-        results = await asyncio.gather(*tasks)
-
-        return 1
+        return 0,
 
 
 async def parse_otodom():
@@ -83,6 +93,6 @@ async def parse_otodom():
     logger_setup(logger)
     result = await asyncio.gather(asyncio.create_task(get_postings()))
 
-    logger.success(f'Otodom has been successfully analyzed in {round(time.monotonic() - start_time, 1)}')
+    logger.success(f'Otodom has been successfully analyzed in {round(time.monotonic() - start_time, 1)} seconds!')
 
     return result
