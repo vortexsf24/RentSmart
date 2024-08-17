@@ -9,25 +9,29 @@ from fake_useragent import UserAgent
 from loguru import logger
 from log import logger_setup
 
-URL = 'https://www.otodom.pl/pl/wyniki/wynajem/mieszkanie/cala-polska'
+PAGE_URL = 'https://www.otodom.pl/pl/wyniki/wynajem/mieszkanie/cala-polska'
+JSON_URL = 'https://www.otodom.pl/_next/data/91ZnsW0yvz8l1VBrd30i0/pl/wyniki/wynajem/mieszkanie/cala-polska.json'
 params = {
-    'ownerTypeSingleSelect': 'ALL',
-    'viewType': 'listing',
     'limit': '72',
+    'viewType': 'listing',
+    'ownerTypeSingleSelect': 'ALL',
+    'searchingCriteria': [
+        'wynajem',
+        'mieszkanie',
+        'cala-polska',
+    ],
 }
 headers = {
     'User-Agent': UserAgent().chrome,
 }
 
-MAX_REQUESTS_ATTEMPTS = 8
+MAX_REQUESTS_ATTEMPTS = 4
 
 
-async def fetch(session: aiohttp.ClientSession, params: dict = params, request_attempt: int = 1) -> str:
+async def fetch(session: aiohttp.ClientSession, url: str, params: dict, request_attempt: int = 1) -> str | None:
     try:
-        async with session.get(URL, params=params, headers=headers) as response:
-            await asyncio.sleep(1)
+        async with session.get(url, params=params, headers=headers) as response:
             html = await response.text()
-            await asyncio.sleep(1)
             return html
 
     except aiohttp.ClientResponseError as _failed_request:
@@ -50,7 +54,7 @@ async def fetch(session: aiohttp.ClientSession, params: dict = params, request_a
             await asyncio.sleep(awaiting_time)
 
             loop = asyncio.get_event_loop()
-            await loop.create_task(fetch(session, params, request_attempt))
+            await loop.create_task(fetch(session, JSON_URL, params, request_attempt))
 
         else:
             logger.critical(_failed_request)
@@ -59,14 +63,12 @@ async def fetch(session: aiohttp.ClientSession, params: dict = params, request_a
         logger.critical(_ex)
 
 
-async def get_postings() -> tuple:
+async def get_postings() -> int:
     async with aiohttp.ClientSession(
-        connector=aiohttp.TCPConnector(limit=20, ttl_dns_cache=518),
+        connector=aiohttp.TCPConnector(limit=20, ttl_dns_cache=300),
         raise_for_status=True
     ) as session:
-        html = await fetch(session, params)
-        with open('html.html', 'w', encoding="utf-8") as file:
-            file.write(html)
+        html = await fetch(session, PAGE_URL, params)
         soup = BeautifulSoup(html, 'lxml')
 
         page_quantity = int(
@@ -75,24 +77,25 @@ async def get_postings() -> tuple:
 
         tasks = []
         for page_number in range(1, page_quantity + 1):
-            tasks.append(asyncio.create_task(fetch(session, params | {'page': page_number})))
+            tasks.append(asyncio.create_task(fetch(session, JSON_URL, params | {'page': page_number})))
+
+        exceptions_count = 0
         a = 0
         for page in await asyncio.gather(*tasks):
-            soup = BeautifulSoup(page, 'lxml')
-            pictures_promoted = soup.find('ul', attrs={'class': 'css-rqwdxd e127mklk0'}).find_all('li')[0].find('img')
-            # pictures_first_group = soup.find('div', attrs={'data-cy': 'search.listing.organic'}).find_all('ul')
-            # location = soup.find_all('p', class_='css-42r2ms eejmx80')
             a+=1
-            print(pictures_promoted, a)
+            print(page, f'ASDASD {a}')
 
-        return 0,
+        return 1 if exceptions_count else 0
 
 
 async def parse_otodom():
     start_time = time.monotonic()
     logger_setup(logger)
-    result = await asyncio.gather(asyncio.create_task(get_postings()))
+    execution_status = await asyncio.gather(asyncio.create_task(get_postings()))
 
-    logger.success(f'Otodom has been successfully analyzed in {round(time.monotonic() - start_time, 1)} seconds!')
+    if execution_status[0]:
+        logger.critical(f'Otodom hasn\'t been analyzed and the execution took {round(time.monotonic() - start_time, 1)} seconds!')
+    else:
+        logger.success(f'Otodom has been successfully analyzed in {round(time.monotonic() - start_time, 1)} seconds!')
 
-    return result
+    raise AttributeError
