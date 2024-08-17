@@ -1,4 +1,10 @@
+# line 50 сделать так чтобы ретерн не None
+# сделать success если все все правильно в бд записалось, Error елси не все, critical если ничего
+# сделать функцию которая автоматически при ошибке 404 находит новую ссылку на файл json
+# добавить прокси и при 403 их менять
+
 import time
+import json
 import random
 import asyncio
 
@@ -25,7 +31,7 @@ headers = {
     'User-Agent': UserAgent().chrome,
 }
 
-MAX_REQUESTS_ATTEMPTS = 4
+MAX_REQUESTS_ATTEMPTS = 5
 
 
 async def fetch(session: aiohttp.ClientSession, url: str, params: dict, request_attempt: int = 1) -> str | None:
@@ -48,13 +54,13 @@ async def fetch(session: aiohttp.ClientSession, url: str, params: dict, request_
 
             logger.warning(_failed_request)
 
-            awaiting_time = 1 * 2 ** request_attempt + round(random.uniform(0, 1, ), 2)
+            awaiting_time = 1 * 2 ** request_attempt + round(random.uniform(0, 1, ), 3)
             request_attempt += 1
 
             await asyncio.sleep(awaiting_time)
 
             loop = asyncio.get_event_loop()
-            await loop.create_task(fetch(session, JSON_URL, params, request_attempt))
+            return await loop.create_task(fetch(session, JSON_URL, params, request_attempt))
 
         else:
             logger.critical(_failed_request)
@@ -65,7 +71,7 @@ async def fetch(session: aiohttp.ClientSession, url: str, params: dict, request_
 
 async def get_postings() -> int:
     async with aiohttp.ClientSession(
-        connector=aiohttp.TCPConnector(limit=20, ttl_dns_cache=300),
+        connector=aiohttp.TCPConnector(limit=200, ttl_dns_cache=300),
         raise_for_status=True
     ) as session:
         html = await fetch(session, PAGE_URL, params)
@@ -83,7 +89,7 @@ async def get_postings() -> int:
         a = 0
         for page in await asyncio.gather(*tasks):
             a+=1
-            print(page, f'ASDASD {a}')
+            print(json.loads(page), f'ASDASD {a}')
 
         return 1 if exceptions_count else 0
 
