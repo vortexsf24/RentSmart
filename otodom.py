@@ -16,7 +16,7 @@ from loguru import logger
 from log import logger_setup
 
 PAGE_URL = 'https://www.otodom.pl/pl/wyniki/wynajem/mieszkanie/cala-polska'
-JSON_URL = 'https://www.otodom.pl/_next/data/91ZnsW0yvz8l1VBrd30i0/pl/wyniki/wynajem/mieszkanie/cala-polska.json'
+JSON_URL = 'https://www.otodom.pl/_next/data/spJgSgMUsdojODn2PoCzO/pl/wyniki/wynajem/mieszkanie/cala-polska.json'
 params = {
     'limit': '72',
     'viewType': 'listing',
@@ -71,7 +71,7 @@ async def fetch(session: aiohttp.ClientSession, url: str, params: dict, request_
 
 async def get_postings() -> int:
     async with aiohttp.ClientSession(
-        connector=aiohttp.TCPConnector(limit=200, ttl_dns_cache=300),
+        connector=aiohttp.TCPConnector(limit=20, ttl_dns_cache=300),
         raise_for_status=True
     ) as session:
         html = await fetch(session, PAGE_URL, params)
@@ -86,10 +86,31 @@ async def get_postings() -> int:
             tasks.append(asyncio.create_task(fetch(session, JSON_URL, params | {'page': page_number})))
 
         exceptions_count = 0
-        a = 0
+        a = 1
+        posts = []
         for page in await asyncio.gather(*tasks):
+            print(a)
             a+=1
-            print(json.loads(page), f'ASDASD {a}')
+            # if isistance(:
+            #     print('govno')
+            #     continue
+
+            page = json.loads(page)
+            page_postings = page['pageProps']['data']['searchAds']['items']
+
+            for posting in page_postings:
+                posting_data  = {
+                'image': posting['images'][0]['large'] if len(posting['images']) != 0 else 'Zapytaj',
+                'price': posting['totalPrice']['value'] if posting['totalPrice'] is not None else 'Zapytaj',
+                'rent_price': posting['rentPrice']['value'] if posting['rentPrice'] is not None else 'Zapytaj',
+                'square_meters': posting['areaInSquareMeters'],
+                'number_of_rooms': posting['roomsNumber']}
+
+                posts.append(posting_data)
+
+        print(posts)
+        print(len(posts))
+
 
         return 1 if exceptions_count else 0
 
