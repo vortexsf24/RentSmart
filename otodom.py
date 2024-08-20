@@ -16,7 +16,7 @@ from loguru import logger
 from log import logger_setup
 
 PAGE_URL = 'https://www.otodom.pl/pl/wyniki/wynajem/mieszkanie/cala-polska'
-JSON_URL = 'https://www.otodom.pl/_next/data/spJgSgMUsdojODn2PoCzO/pl/wyniki/wynajem/mieszkanie/cala-polska.json'
+JSON_URL = 'https://www.otodom.pl/_next/data/8dtABNGsI3XDN1lZKEgU8/pl/wyniki/wynajem/mieszkanie/cala-polska.json'
 params = {
     'limit': '72',
     'viewType': 'listing',
