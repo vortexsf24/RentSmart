@@ -14,5 +14,5 @@ def logger_setup(logger):
     logger.add(
         sink=sys.stdout,
         format='[+] {time:MMM D, YYYY - HH:mm:ss} | {file} | line: {line} | <level>{level}</level> | {message}\n',
-        level='SUCCESS',
+        level='INFO',
     )

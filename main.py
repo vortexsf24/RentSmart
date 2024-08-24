@@ -1,16 +1,27 @@
 import asyncio
 from otodom import parse_otodom
+
+import time
+import logging as logger
+
 import db
 
 async def main():
-    while True:
-        connection = db.DbConnection()
-        await connection.create_pool()
+    
+    
 
-        for result in await asyncio.gather(asyncio.create_task(parse_otodom())):
-            await connection.update_news(paper_name=result[0], news=result[1])
+    
+    connection = await db.create_pool()
+    
+    for result in await asyncio.gather(asyncio.create_task(parse_otodom())):
+        start_time = time.monotonic()
+        await db.update_postings(connection,result)
+    
+    connection.close()
+
+    logger.info(f'Process of collecting postings took {round(time.monotonic() - start_time, 1)} seconds')
+
         
-        await asyncio.sleep(3600)
 
 
 if __name__ == "__main__":
