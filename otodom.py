@@ -1,6 +1,4 @@
-# сделать success если все все правильно в бд записалось, Error елси не все, critical если ничего
 # добавить прокси и при 403 их менять
-# code 0, 1, 2 (critical, successful, finished with errors)
 # docstrings
 
 import time
@@ -14,6 +12,9 @@ from fake_useragent import UserAgent
 
 from loguru import logger
 from log import logger_setup
+
+from misc.utils import otodom_format_rooms_number
+from misc.utils import otodom_format_floor_number
 
 PAGE_URL = 'https://www.otodom.pl/pl/wyniki/wynajem/mieszkanie/cala-polska'
 BASE_JSON_URL = 'https://www.otodom.pl/_next/data/%s/pl/wyniki/wynajem/mieszkanie/cala-polska.json'
@@ -41,8 +42,7 @@ headers = {
 async def fetch(session: aiohttp.ClientSession, url: str, params: dict, request_attempt: int = 1) -> str | int:
     try:
         async with session.get(url, params=params, headers=headers) as response:
-            html = await response.text()
-            return html
+            return await response.text()
 
     except aiohttp.ClientResponseError as _failed_request:
         if _failed_request.status == 403:
@@ -89,7 +89,7 @@ async def get_postings() -> int:
     try:
         async with aiohttp.ClientSession(
             connector=aiohttp.TCPConnector(limit=20, ttl_dns_cache=300),
-            raise_for_status=True
+            raise_for_status=True,
         ) as session:
             tasks = []
             exceptions_count = 0
@@ -117,14 +117,13 @@ async def get_postings() -> int:
 
                 for posting in postings:
                     posting_data = {
-                        'id': posting['id'],
                         'title': posting['title'],
                         'image': posting['images'][0]['large'] if len(posting['images']) > 0 else 'Zapytaj',
                         'price': posting['totalPrice']['value'] if posting['totalPrice'] is not None else 'Zapytaj',
                         'czynsz': posting['rentPrice']['value'] if posting['rentPrice'] is not None else 'Zapytaj',
                         'area': posting['areaInSquareMeters'],
-                        'rooms_number': posting['roomsNumber'],
-                        'floor_number': posting['floorNumber'],
+                        'rooms_number': otodom_format_rooms_number(posting['roomsNumber']),
+                        'floor_number': otodom_format_floor_number(posting['floorNumber']),
                         'is_agency': False if posting['agency'] == 'null' else True,
                         'city': posting['location']['address']['city']['name'],
                         'address': posting['location']['address']['street']['name'] if posting['location']['address'][
@@ -150,10 +149,19 @@ async def parse_otodom():
 
     match await get_postings():
         case 0:
-            logger.critical(f'Otodom hasn\'t been analyzed!')
+            logger.critical(
+                f'Otodom hasn\'t been analyzed! '
+                f'Execution took {(time.monotonic() - start_time):.1f} seconds. '
+            )
 
         case 1:
-            logger.success(f'Otodom has been successfully analyzed in {round(time.monotonic() - start_time, 1)} seconds!')
+            logger.success(
+                f'Otodom has been successfully analyzed! '
+                f'Execution took {(time.monotonic() - start_time):.1f} seconds. '
+            )
 
         case 2:
-            logger.warning(f'Otodom has been analyzed but with some errors!')
+            logger.warning(
+                f'Otodom has been analyzed but some errors occurred during execution! '
+                f'Execution took {(time.monotonic() - start_time):.1f} seconds.'
+            )
