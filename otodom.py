@@ -106,7 +106,7 @@ async def get_postings() -> int:
             # if 404 occurs it will make a new link
             assert await fetch(session, final_json_url, params)
 
-            for page_number in range(1, page_quantity+1):
+            for page_number in range(1, 2):
                 tasks.append(asyncio.create_task(fetch(session, final_json_url, params | {'page': page_number})))
 
             for page in await asyncio.gather(*tasks):
@@ -119,7 +119,7 @@ async def get_postings() -> int:
 
                 for posting in postings:
                     posting_data = {
-                        'id': posting['id'],
+                        # 'id': posting['id'],
                         'title': posting['title'],
                         'image': posting['images'][0]['large'] if len(posting['images']) > 0 else 'Zapytaj',
                         'price': posting['totalPrice']['value'] if posting['totalPrice'] is not None else 'Zapytaj',

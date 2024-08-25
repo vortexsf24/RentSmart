@@ -37,20 +37,20 @@ async def update_postings(pool ,postings: dict) -> None:
             async with connection.cursor() as cursor:
                 delete_query = 'DELETE FROM postings'
                 await cursor.execute(delete_query)
-                a=0
+                
                 for section in postings:
-                    a+1
+                    
                     columns = ", ".join(section.keys())
                     values = ", ".join(["%s"] * len(section))
                     insert_query = f"INSERT INTO postings ({columns}) VALUES ({values});"
                     await cursor.execute(insert_query, list(section.values()))
-                print(a)
+                
                 await connection.commit()
     except Exception as _ex:
-        print(a)
+        
         logger.error(_ex)
 
-async def get_postings() -> list:
+async def get_postings(pool) -> list:
     try:
         async with pool.acquire() as connection:
             async with connection.cursor() as cursor:
