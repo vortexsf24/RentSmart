@@ -1,3 +1,11 @@
+"""
+1. Решить проблему с Threads (RuntimeError: threads can only be started once)
+    Чтобы "20" карточек загружалось и потом закрывался после скрола вниз стартовал снова
+
+2. Сделать дизайн карточек 
+3. {type(self).__name__} Warning: Given image is not CTkImage but {type(image)}. Image can not be scaled on HighDPI displays, use CTkImage instead
+"""
+
 import customtkinter as ctk
 from PIL import Image, ImageTk
 
@@ -9,13 +17,15 @@ from io import BytesIO
 import os
 from dotenv import load_dotenv
 
+from threading import Thread
+
 
 load_dotenv()
 
 class ProductCard(ctk.CTkFrame):
     def __init__(self, master, image, name, price, *args, **kwargs):
         super().__init__(master, *args, **kwargs)
-        self.image = image.resize((100, 100), Image.LANCZOS)
+        self.image = image.resize((200, 200), Image.LANCZOS)
         self.photo = ImageTk.PhotoImage(self.image)
         
         self.image_label = ctk.CTkLabel(self, image=self.photo)
@@ -47,17 +57,20 @@ class ScrollableFrame(ctk.CTkFrame):
         self.canvas.pack(side="left", fill="both", expand=True)
         self.scrollbar.pack(side="right", fill="y")
         
-        self.load_more_callback = load_more_callback
-        self.canvas.bind("<Configure>", self.on_scroll)
+        self.load_more_callback = Thread(target = load_more_callback)
+        self.canvas.bind("<MouseWheel>", self.on_scroll)
 
     def on_scroll(self, event):
-        if self.canvas.yview()[1] > 0.9:
-            self.load_more_callback()
+        if self.canvas.yview()[1] >= 0.7:
+            
+            self.load_more_callback.start()
+
+            
 
 class App(ctk.CTk):
     def __init__(self):
         super().__init__()
-        self.title("Product Catalog")
+        self.title("Smart Rent")
         self.geometry("600x400")
         
         self.scrollable_frame = ScrollableFrame(self, self.load_more_products)
@@ -83,7 +96,7 @@ class App(ctk.CTk):
     
     def load_image(self, image_path):
         response = requests.get(image_path)
-        img_data = BytesIO(response.content)  # Use BytesIO to handle the image data
+        img_data = BytesIO(response.content)  
         img = Image.open(img_data)
         return img
 
@@ -94,7 +107,9 @@ class App(ctk.CTk):
             card = ProductCard(self.scrollable_frame.scrollable_frame, img, name, price)
             card.pack(pady=10)
         self.offset += self.limit
+        
 
 if __name__ == "__main__":
     app = App()
     app.mainloop()
+
