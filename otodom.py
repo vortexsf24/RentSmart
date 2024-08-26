@@ -1,8 +1,10 @@
-# сделать success если все все правильно в бд записалось, Error елси не все, critical если ничего
-# добавить прокси и при 403 их менять
-# code 0, 1, 2 (critical, successful, finished with errors)
-# docstrings
+"""
+1. Create transaction with delete statement and execute it only once and then insert posting_data in cycle then end transaction (OR integrate update
+algorythm saving old data for still existing posts)
 
+2. добавить прокси и при 403 их менять
+3. docstrings
+"""
 import time
 import json
 import random
@@ -12,8 +14,13 @@ import aiohttp
 from bs4 import BeautifulSoup
 from fake_useragent import UserAgent
 
+import db
+
 from loguru import logger
 from log import logger_setup
+
+from misc.utils import otodom_format_rooms_number
+from misc.utils import otodom_format_floor_number
 
 PAGE_URL = 'https://www.otodom.pl/pl/wyniki/wynajem/mieszkanie/cala-polska'
 BASE_JSON_URL = 'https://www.otodom.pl/_next/data/%s/pl/wyniki/wynajem/mieszkanie/cala-polska.json'
@@ -37,13 +44,11 @@ headers = {
     'User-Agent': UserAgent().chrome,
 }
 
-result_postings = []
 
 async def fetch(session: aiohttp.ClientSession, url: str, params: dict, request_attempt: int = 1) -> str | int:
     try:
         async with session.get(url, params=params, headers=headers) as response:
-            html = await response.text()
-            return html
+            return await response.text()
 
     except aiohttp.ClientResponseError as _failed_request:
         if _failed_request.status == 403:
@@ -88,11 +93,11 @@ async def fetch(session: aiohttp.ClientSession, url: str, params: dict, request_
 
 async def get_postings() -> int:
     try:
-        global posting_data
         async with aiohttp.ClientSession(
             connector=aiohttp.TCPConnector(limit=20, ttl_dns_cache=300),
-            raise_for_status=True
+            raise_for_status=True,
         ) as session:
+            
             tasks = []
             exceptions_count = 0
 
@@ -106,9 +111,9 @@ async def get_postings() -> int:
             # if 404 occurs it will make a new link
             assert await fetch(session, final_json_url, params)
 
-            for page_number in range(1, 2):
+            for page_number in range(1, page_quantity + 1):
                 tasks.append(asyncio.create_task(fetch(session, final_json_url, params | {'page': page_number})))
-
+            
             for page in await asyncio.gather(*tasks):
                 if page in (0, None):
                     exceptions_count += 1
@@ -119,14 +124,13 @@ async def get_postings() -> int:
 
                 for posting in postings:
                     posting_data = {
-                        # 'id': posting['id'],
                         'title': posting['title'],
                         'image': posting['images'][0]['large'] if len(posting['images']) > 0 else 'Zapytaj',
                         'price': posting['totalPrice']['value'] if posting['totalPrice'] is not None else 'Zapytaj',
                         'czynsz': posting['rentPrice']['value'] if posting['rentPrice'] is not None else 'Zapytaj',
                         'area': posting['areaInSquareMeters'],
-                        'rooms_number': posting['roomsNumber'],
-                        'floor_number': posting['floorNumber'],
+                        'rooms_number': otodom_format_rooms_number(posting['roomsNumber']),
+                        'floor_number': otodom_format_floor_number(posting['floorNumber']),
                         'is_agency': False if posting['agency'] == 'null' else True,
                         'city': posting['location']['address']['city']['name'],
                         'address': posting['location']['address']['street']['name'] if posting['location']['address'][
@@ -135,8 +139,7 @@ async def get_postings() -> int:
                         'link': f'https://www.otodom.pl/pl/oferta/{posting['slug']}',
                         'platform': 'otodom',
                     }
-                    result_postings.append(posting_data)
-
+                    
             return 2 if exceptions_count else 1
 
     except AssertionError:
@@ -153,12 +156,19 @@ async def parse_otodom():
 
     match await get_postings():
         case 0:
-            logger.critical(f'Otodom hasn\'t been analyzed!')
+            logger.critical(
+                f'Otodom hasn\'t been analyzed! '
+                f'Execution took {(time.monotonic() - start_time):.1f} seconds. '
+            )
 
         case 1:
-            logger.success(f'Otodom has been successfully analyzed in {round(time.monotonic() - start_time, 1)} seconds!')
+            logger.success(
+                f'Otodom has been successfully analyzed! '
+                f'Execution took {(time.monotonic() - start_time):.1f} seconds. '
+            )
 
         case 2:
-            logger.warning(f'Otodom has been analyzed but with some errors!')
-    
-    return result_postings
+            logger.warning(
+                f'Otodom has been analyzed but some errors occurred during execution! '
+                f'Execution took {(time.monotonic() - start_time):.1f} seconds.'
+            )

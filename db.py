@@ -4,12 +4,7 @@ import logging as logger
 import os
 from dotenv import load_dotenv
 
-logger.basicConfig(
-    level=logger.INFO,
-    format=u'%(filename)s:%(lineno)d #%(levelname)-1s [%(asctime)s]  ----->  %(message)s'
-)
 
-pool = None
 load_dotenv()
 
 async def create_pool():
@@ -28,27 +23,26 @@ async def create_pool():
         return pool
 
     except Exception as _ex:
-        logger.error(_ex)
+        logger.critical(f'Pool hasn\'t been created!')
     
 
-async def update_postings(pool ,postings: dict) -> None:
+async def update_postings(pool ,posting: dict) -> None:
     try:
         async with pool.acquire() as connection:
-            async with connection.cursor() as cursor:
+            async with connection.transaction():
+
+                # Delete existing postings
                 delete_query = 'DELETE FROM postings'
-                await cursor.execute(delete_query)
+                await connection.execute(delete_query)
                 
-                for section in postings:
-                    
-                    columns = ", ".join(section.keys())
-                    values = ", ".join(["%s"] * len(section))
-                    insert_query = f"INSERT INTO postings ({columns}) VALUES ({values});"
-                    await cursor.execute(insert_query, list(section.values()))
-                
-                await connection.commit()
-    except Exception as _ex:
-        
-        logger.error(_ex)
+                # Insert new postings
+                insert_query = '''INSERT INTO postings (title, image, price, czynsz,
+                                area, rooms_number, floor_number,
+                                is_agency, city, address, date, link, platform)
+                                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)'''
+                await connection.execute(insert_query, *posting.values())
+    except Exception as ex:
+        logger.critical(f"Error updating postings: {ex}")
 
 async def get_postings(pool) -> list:
     try:
@@ -58,7 +52,7 @@ async def get_postings(pool) -> list:
                 await cursor.execute(select_query)
                 rows = await cursor.fetchall()
                 return rows
-    except Exception as _ex:
-        logger.error(_ex)
+    except Exception as ex:
+        logger.critical(f"Error retrieving postings: {ex}")
         return []
 
