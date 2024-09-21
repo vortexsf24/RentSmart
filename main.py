@@ -1,10 +1,16 @@
+# через os dotenv
+# docstings
+
 import asyncio
+
 from otodom import parse_otodom
 
 
 async def main():
     while True:
-        await asyncio.gather(asyncio.create_task(parse_otodom()))
+        await asyncio.gather(
+            asyncio.create_task(parse_otodom()),
+        )
         await asyncio.sleep(3600)
 
 

@@ -1,4 +1,4 @@
-def otodom_format_rooms_number(number):
+def otodom_format_rooms_number(rooms_number: str) -> str:
     room_numbers = {
         'ONE': '1',
         'TWO': '2',
@@ -13,10 +13,10 @@ def otodom_format_rooms_number(number):
         'MORE': '10+',
     }
 
-    return room_numbers.get(number, 'Zapytaj')
+    return room_numbers.get(rooms_number, 'Zapytaj')
 
 
-def otodom_format_floor_number(number):
+def otodom_format_floor_number(floor_number: str) -> str:
     floor_numbers = {
         'GROUND': '0',
         'FIRST': '1',
@@ -32,4 +32,4 @@ def otodom_format_floor_number(number):
         'ABOVE_TENTH': '10+',
     }
 
-    return floor_numbers.get(number, 'Zapytaj')
+    return floor_numbers.get(floor_number, 'Zapytaj')

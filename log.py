@@ -1,7 +1,9 @@
 import sys
 
+from loguru import logger
 
-def logger_setup(logger):
+
+def setup_logger():
     logger.remove()
     logger.add(
         sink='{time:MMM-YYYY}.log',
@@ -14,5 +16,8 @@ def logger_setup(logger):
     logger.add(
         sink=sys.stdout,
         format='[+] {time:MMM D, YYYY - HH:mm:ss} | {file} | line: {line} | <level>{level}</level> | {message}\n',
-        level='INFO',
+        level='SUCCESS',
     )
+
+
+setup_logger()

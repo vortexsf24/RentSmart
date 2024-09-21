@@ -1,6 +1,3 @@
-# добавить прокси и при 403 их менять
-# docstrings
-
 import time
 import json
 import random
@@ -10,8 +7,9 @@ import aiohttp
 from bs4 import BeautifulSoup
 from fake_useragent import UserAgent
 
-from loguru import logger
-from log import logger_setup
+from db import Db
+
+from log import logger
 
 from misc.utils import otodom_format_rooms_number
 from misc.utils import otodom_format_floor_number
@@ -39,23 +37,23 @@ headers = {
 }
 
 
-async def fetch(session: aiohttp.ClientSession, url: str, params: dict, request_attempt: int = 1) -> str | int:
+async def _fetch(session: aiohttp.ClientSession, url: str, params: dict, request_attempt: int = 1) -> str | int:
     try:
         async with session.get(url, params=params, headers=headers) as response:
             return await response.text()
 
-    except aiohttp.ClientResponseError as _failed_request:
-        if _failed_request.status == 403:
-            logger.critical(_failed_request)
+    except aiohttp.ClientResponseError as failed_request:
+        if failed_request.status == 403:
+            logger.critical(failed_request)
             return 0
 
-        elif _failed_request.status == 404:
+        elif failed_request.status == 404:
             global final_json_url
             global dynamic_json_link_part
 
             logger.info('JSON link is expired, finding a new one...')
 
-            html = await fetch(session, PAGE_URL, params)
+            html = await _fetch(session, PAGE_URL, params)
             soup = BeautifulSoup(html, 'lxml')
 
             dynamic_json_link_part = json.loads(soup.find('script', id='__NEXT_DATA__').text)['buildId']
@@ -63,53 +61,59 @@ async def fetch(session: aiohttp.ClientSession, url: str, params: dict, request_
 
             return 1
 
-        elif _failed_request.status == 429:
+        elif failed_request.status == 429:
             if request_attempt == MAX_REQUESTS_ATTEMPTS:
-                logger.error(_failed_request)
+                logger.critical(failed_request)
                 return 0
 
-            logger.warning(_failed_request)
+            logger.warning(failed_request)
 
-            awaiting_time = 1 * 2 ** request_attempt + round(random.uniform(0, 1, ), 3)
+            awaiting_time = 2 ** request_attempt + round(random.uniform(0, 1, ), 3)
             request_attempt += 1
 
             await asyncio.sleep(awaiting_time)
 
             loop = asyncio.get_event_loop()
-            return await loop.create_task(fetch(session, url, params, request_attempt))
+            return await loop.create_task(_fetch(session, url, params, request_attempt))
 
         else:
-            logger.critical(_failed_request)
+            logger.critical(failed_request)
+            return 0
 
-    except Exception as _ex:
-        logger.critical(_ex)
+    except Exception as ex:
+        logger.critical(ex)
+        return 0
 
 
-async def get_postings() -> int:
+async def _get_postings() -> int:
     try:
         async with aiohttp.ClientSession(
             connector=aiohttp.TCPConnector(limit=20, ttl_dns_cache=300),
             raise_for_status=True,
         ) as session:
-            tasks = []
-            exceptions_count = 0
+            tasks = list()
+            current_links = list()
+            exceptions_quantity = 0
 
-            html = await fetch(session, PAGE_URL, params)
+            db_conn = Db()
+            await db_conn.create_pool()
+
+            html = await _fetch(session, PAGE_URL, params)
             soup = BeautifulSoup(html, 'lxml')
 
-            page_quantity = int(
+            pages_quantity = int(
                 soup.find('ul', attrs={'data-cy': 'frontend.search.base-pagination.nexus-pagination'}).find_all('li')[-2].text
             )
 
-            # if 404 occurs it will make a new link
-            assert await fetch(session, final_json_url, params)
+            # test request, f.e. if 404 occurs it will make a new link
+            assert await _fetch(session, final_json_url, params)
 
-            for page_number in range(1, page_quantity + 1):
-                tasks.append(asyncio.create_task(fetch(session, final_json_url, params | {'page': page_number})))
+            for page_number in range(1, pages_quantity + 1):
+                tasks.append(asyncio.create_task(_fetch(session, final_json_url, params | {'page': page_number})))
 
             for page in await asyncio.gather(*tasks):
                 if page in (0, None):
-                    exceptions_count += 1
+                    exceptions_quantity += 1
                     continue
 
                 page = json.loads(page)
@@ -133,31 +137,37 @@ async def get_postings() -> int:
                         'platform': 'otodom',
                     }
 
-            return 2 if exceptions_count else 1
+                    current_links.append(posting_data['link'])
+                    await db_conn.insert_posting(posting_data)
+
+            await db_conn.remove_deleted_postings(current_links)
+            await db_conn.close_pool()
+
+            return 2 if exceptions_quantity else 1
 
     except AssertionError:
-        logger.critical('404 is not resolved!')
+        logger.critical('During the test request an exception arose and wasn\'t resolved!')
         return 0
 
-    except Exception as _ex:
-        logger.critical(_ex)
+    except Exception as ex:
+        logger.critical(ex)
+        return 0
 
 
 async def parse_otodom():
     start_time = time.monotonic()
-    logger_setup(logger)
 
-    match await get_postings():
+    match await _get_postings():
         case 0:
             logger.critical(
                 f'Otodom hasn\'t been analyzed! '
-                f'Execution took {(time.monotonic() - start_time):.1f} seconds. '
+                f'Execution took {(time.monotonic() - start_time):.1f} seconds.'
             )
 
         case 1:
             logger.success(
                 f'Otodom has been successfully analyzed! '
-                f'Execution took {(time.monotonic() - start_time):.1f} seconds. '
+                f'Execution took {(time.monotonic() - start_time):.1f} seconds.'
             )
 
         case 2:
